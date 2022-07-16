@@ -6,8 +6,8 @@
 template <typename E>
 void test_to_from_string(E const e, std::string const s)
 {
-  assert(enum_strings::to_string(e) == s);
-  assert(enum_strings::from_string<E>(s) == e);
+  assert(enum_to_string(e) == s);
+  assert(enum_from_string<E>(s) == e);
 }
 
 template <typename E>
@@ -20,13 +20,6 @@ void test_stream_io(E const e)
   assert(v == e);
 }
 
-template <typename E, typename... ARGS>
-void test_get_strings(ARGS &&...args)
-{
-  std::vector<std::string> expected{args...};
-  assert(_get_enum_strings(E{}) == expected);
-}
-
 ///////////////////////////////
 
 namespace N1
@@ -37,8 +30,8 @@ namespace N1
     B,
     END
   };
-  ENUM_STRINGS(WeakEnum, "wa", "wb");
 }
+ENUM_STRINGS(N1::WeakEnum, "wa", "wb");
 
 namespace N2
 {
@@ -47,8 +40,9 @@ namespace N2
     A,
     B
   };
-  ENUM_STRINGS(StrongEnum, "sa", "sb");
 }
+
+ENUM_STRINGS(N2::StrongEnum, "sa", "sb");
 
 namespace N3
 {
@@ -61,8 +55,8 @@ namespace N3
       END
     };
   };
-  ENUM_STRINGS(Foo::NestedEnum, "fa", "fb");
 }
+ENUM_STRINGS(N3::Foo::NestedEnum, "fa", "fb");
 
 ///////////////////////////////
 
@@ -72,19 +66,16 @@ int main()
   test_to_from_string(N1::B, "wb");
   test_stream_io(N1::A);
   test_stream_io(N1::B);
-  test_get_strings<N1::WeakEnum>("wa", "wb");
 
   test_to_from_string(N2::StrongEnum::A, "sa");
   test_to_from_string(N2::StrongEnum::B, "sb");
   test_stream_io(N2::StrongEnum::A);
   test_stream_io(N2::StrongEnum::B);
-  test_get_strings<N2::StrongEnum>("sa", "sb");
 
   test_to_from_string(N3::Foo::NestedEnum::A, "fa");
   test_to_from_string(N3::Foo::NestedEnum::B, "fb");
   test_stream_io(N3::Foo::NestedEnum::A);
   test_stream_io(N3::Foo::NestedEnum::B);
-  test_get_strings<N3::Foo::NestedEnum>("fa", "fb");
 
   auto array1 = to_array<uint32_t>({1, 2, 3, 4});
 

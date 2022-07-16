@@ -28,70 +28,6 @@
  *  of enum values and checked at compile time against number of strings.
  */
 
-using stringlist = std::vector<std::string>;
-
-#define ENUM_STRINGS(E, ...)                                    \
-    static_assert(std::is_enum<E>::value,                       \
-                  "Not an enumeration type");                   \
-                                                                \
-    inline std::vector<std::string> const &_get_enum_strings(E) \
-    {                                                           \
-        static stringlist ss{__VA_ARGS__};                      \
-        return ss;                                              \
-    }                                                           \
-                                                                \
-    inline std::ostream &                                       \
-    operator<<(std::ostream &os, E const e)                     \
-    {                                                           \
-        os << ::enum_strings::to_string(e);                     \
-        return os;                                              \
-    }                                                           \
-                                                                \
-    inline std::istream &                                       \
-    operator>>(std::istream &is, E &e)                          \
-    {                                                           \
-        std::string s;                                          \
-        is >> s;                                                \
-        e = ::enum_strings::from_string<E>(s);                  \
-        return is;                                              \
-    }
-
-namespace enum_strings
-{
-    template <typename E>
-    inline std::string to_string(E const e)
-    {
-        using base_type = std::underlying_type_t<E>;
-        const auto &strings = _get_enum_strings(E{});
-        auto const index = static_cast<base_type>(e);
-        if (index >= static_cast<base_type>(strings.size()))
-        {
-            throw std::invalid_argument("Invalid value " + std::to_string(index) + ". "
-                                                                                   "Valid range is 0.." +
-                                        std::to_string(strings.size() - 1));
-        }
-        return strings[index];
-    }
-
-    template <typename E>
-    inline E from_string(std::string const &s)
-    {
-        const auto &strings = _get_enum_strings(E{});
-        std::size_t n = 0;
-        while (n < strings.size() && strings[n] != s)
-        {
-            ++n;
-        }
-        if (n == strings.size())
-        {
-            throw std::invalid_argument("'" + s + "' is not a valid string representation of this type");
-        }
-        auto const e = static_cast<E>(n);
-        return e;
-    }
-
-} // namespace enum_strings
-
 template <typename R, typename P, size_t N, size_t... I>
 constexpr std::array<R, N> to_array_impl(P (&a)[N], std::index_sequence<I...>) noexcept
 {
@@ -101,7 +37,7 @@ constexpr std::array<R, N> to_array_impl(P (&a)[N], std::index_sequence<I...>) n
 template <typename T, size_t N>
 constexpr std::array<T, N> to_array(T (&a)[N]) noexcept
 {
-    return to_array_impl < std:: : remove_cv_t<T>, T, N > (a, std::make_index_sequence<N>{})
+    return to_array_impl<std::remove_cv_t<T>, T, N>(a, std::make_index_sequence<N>{});
 }
 
 template <typename R, typename P, size_t N, size_t... I>
@@ -114,6 +50,68 @@ template <typename T, size_t N>
 constexpr std::array<T, N> to_array(T (&&a)[N]) noexcept
 {
     return to_array_impl<std::remove_cv_t<T>, T, N>(std::move(a), std::make_index_sequence<N>{});
+}
+
+#define ENUM_STRINGS(E, ...)                                          \
+    static_assert(std::is_enum<E>::value, "Not an enumeration type"); \
+                                                                      \
+    template <>                                                       \
+    struct EnumMetaInfo<E>                                            \
+    {                                                                 \
+        static decltype(to_array<std::string>({__VA_ARGS__})) Info()  \
+        {                                                             \
+            return to_array<std::string>({__VA_ARGS__});              \
+        }                                                             \
+    };                                                                \
+    inline std::ostream &operator<<(std::ostream &os, const E &e)     \
+    {                                                                 \
+        os << enum_to_string(e);                                      \
+        return os;                                                    \
+    }                                                                 \
+    inline std::istream &operator>>(std::istream &is, E &e)           \
+    {                                                                 \
+        std::string s;                                                \
+        is >> s;                                                      \
+        e = enum_from_string<E>(s);                                   \
+        return is;                                                    \
+    }
+
+template <typename T>
+struct EnumMetaInfo
+{
+    static std::array<std::string, 0> Info()
+    {
+        return std::array<std::string, 0>{};
+    }
+};
+
+template <typename E>
+std::string enum_to_string(const E &e)
+{
+    using base_type = std::underlying_type_t<E>;
+    auto const &string_list = EnumMetaInfo<E>::Info();
+    const auto index = static_cast<base_type>(e);
+    const auto max_size = string_list.max_size();
+    // todo : anyway to do static check. assert(index >= max_size, "Error, enum value is not in range");
+    if (index >= static_cast<base_type>(max_size))
+    {
+        return std::string{};
+    }
+    return string_list[index];
+}
+
+template <typename E>
+E enum_from_string(const std::string &s)
+{
+    auto const &string_list = EnumMetaInfo<E>::Info();
+    const auto max_size = string_list.max_size();
+    size_t n = 0;
+    while (n < max_size && string_list[n] != s)
+    {
+        ++n;
+    }
+    // todo: error handling
+    return n == max_size ? E{} : static_cast<E>(n);
 }
 
 #endif // ENUM_STRINGS_H
